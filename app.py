@@ -15,6 +15,12 @@ st.title("Operations Control Center")
 init_db()
 rules = load_rules()
 
+# Demo mode: if the database is empty (for example on a fresh deploy), load sample data
+if fetch_tasks().empty:
+    from seed import seed_tasks
+
+    seed_tasks(100)
+
 st.sidebar.header("Filters")
 raw_df = fetch_tasks()
 teams = ["All"] + sorted(raw_df["team"].dropna().unique().tolist()) if not raw_df.empty else ["All"]
@@ -24,9 +30,16 @@ priorities = ["All"] + sorted(raw_df["priority"].dropna().unique().tolist()) if 
 team_filter = st.sidebar.selectbox("Team", teams)
 owner_filter = st.sidebar.selectbox("Owner", owners)
 priority_filter = st.sidebar.selectbox("Priority", priorities)
+# Default date range covers all tasks in the database
+if raw_df.empty:
+    default_start, default_end = date.today().replace(day=1), date.today()
+else:
+    default_start = raw_df["assigned_date"].min().date()
+    default_end = max(raw_df["assigned_date"].max().date(), date.today())
+
 date_range = st.sidebar.date_input(
     "Assigned date range",
-    value=(date.today().replace(day=1), date.today()),
+    value=(default_start, default_end),
 )
 
 filters = {
@@ -54,15 +67,15 @@ if page == "Dashboard":
     if not df.empty:
         chart_col1, chart_col2 = st.columns(2)
         with chart_col1:
-            st.plotly_chart(px.pie(df, names="status", title="Tasks by Status"), use_container_width=True)
+            st.plotly_chart(px.pie(df, names="status", title="Tasks by Status"), width="stretch")
             st.plotly_chart(
                 px.bar(df.groupby("team").size().reset_index(name="tasks"), x="team", y="tasks", title="Tasks by Team"),
-                use_container_width=True,
+                width="stretch",
             )
 
         with chart_col2:
             owner_load = df.groupby("owner").size().reset_index(name="tasks")
-            st.plotly_chart(px.bar(owner_load, x="owner", y="tasks", title="Workload per Owner"), use_container_width=True)
+            st.plotly_chart(px.bar(owner_load, x="owner", y="tasks", title="Workload per Owner"), width="stretch")
 
             overdue_trend = (
                 df[df["is_overdue"]]
@@ -75,11 +88,11 @@ if page == "Dashboard":
             else:
                 st.plotly_chart(
                     px.line(overdue_trend, x="due_date", y="overdue_tasks", title="Overdue Trend by Day"),
-                    use_container_width=True,
+                    width="stretch",
                 )
 
     st.subheader("Task Table")
-    st.dataframe(df, use_container_width=True)
+    st.dataframe(df, width="stretch")
 
 elif page == "Task Management":
     with st.expander("Add Task", expanded=True):
